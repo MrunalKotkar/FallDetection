@@ -1,7 +1,6 @@
 # Fall Detection & Classification
 
 > **IMU-based fall detection using Deep CNN, Transfer Learning, and Classical ML**  
-> SJSU CS — Advanced Topics in Computer Science | MobiFall Dataset v2.0
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-667eea?style=for-the-badge&logo=streamlit)](https://your-app.streamlit.app)
 [![Visitors](https://visitor-badge.laobi.icu/badge?page_id=mrunalsuhas.fall-detection)](https://github.com/mrunalsuhas/fall-detection)
@@ -13,7 +12,7 @@
 
 Automatically detects whether a 3-second wearable IMU recording contains a **fall**, and classifies the fall type (forward, backward, sideways, on knees).
 
-Three ML pipelines were evaluated and compared:
+Different ML and DL pipelines were evaluated and compared:
 
 | Approach | Accuracy | F1 |
 |---|---|---|
@@ -26,7 +25,7 @@ Three ML pipelines were evaluated and compared:
 
 ## Dataset
 
-**MobiFall v2.0** — accelerometer + gyroscope recordings from 24 subjects wearing a smartphone.
+**MobiFall v2.0**: accelerometer + gyroscope recordings from 24 subjects wearing a smartphone.
 
 | Property | Value |
 |---|---|
@@ -37,10 +36,10 @@ Three ML pipelines were evaluated and compared:
 | ADL types | 9 (walking, jogging, standing, sitting, …) |
 
 **Fall types:**
-- **FOL** — Forward Fall (trips forward, impact on hands/chest)
-- **FKL** — Fall on Knees (stumbles forward, knee then body impact)
-- **BSC** — Back Stumble (steps backward, buttocks/back impact)
-- **SDL** — Sideways Fall (loses lateral balance, side impact)
+- **FOL**: Forward Fall (trips forward, impact on hands/chest)
+- **FKL**: Fall on Knees (stumbles forward, knee then body impact)
+- **BSC**: Back Stumble (steps backward, buttocks/back impact)
+- **SDL**: Sideways Fall (loses lateral balance, side impact)
 
 ---
 
@@ -138,15 +137,7 @@ cd fall-detection
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Export trained models
-See [`models/README.md`](models/README.md) for full instructions. At minimum:
-```bash
-export KAGGLE_USERNAME=your_username
-export KAGGLE_KEY=your_api_key
-python scripts/export_models.py
-```
-
-### 3. Run the app
+### 2. Run the app
 ```bash
 streamlit run streamlit_app.py
 ```
@@ -154,22 +145,17 @@ Open [http://localhost:8501](http://localhost:8501)
 
 ---
 
-## Deployment (free)
-
-This app is deployed on **Streamlit Cloud** at:  
-👉 **[your-app.streamlit.app](https://your-app.streamlit.app)**
-
 ### Deploy your own fork
 
 1. Fork this repo on GitHub
 2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**
 3. Select your repo, branch `main`, file `streamlit_app.py`
 4. (Optional) Add secret `GOATCOUNTER_URL` for visitor analytics
-5. Click **Deploy** — live in ~2 minutes
+5. Click **Deploy**: live in ~2 minutes
 
 ### Visitor analytics
 
-This project uses **[GoatCounter](https://www.goatcounter.com)** — free, open-source,
+This project uses **[GoatCounter](https://www.goatcounter.com)**: free, open-source,
 no cookie banner needed. Set it up:
 
 1. Sign up at [goatcounter.com](https://www.goatcounter.com) (free)
@@ -187,8 +173,8 @@ no cookie banner needed. Set it up:
 
 | Model | Accuracy | F1 | Precision | Recall |
 |---|---|---|---|---|
-| Deep CNN (scratch) | 99.35 % | 99.31 % | — | — |
-| Transfer Learning (3 s) | 99.08 % | 99.03 % | — | — |
+| Deep CNN (scratch) | 99.35 % | 99.31 % | - | - |
+| Transfer Learning (3 s) | 99.08 % | 99.03 % | - | - |
 | XGBoost | 95.09 % | 95.62 % | 93.61 % | 97.71 % |
 | SVM | 94.52 % | 95.13 % | 92.69 % | 97.71 % |
 | Random Forest | 92.92 % | 93.81 % | 90.04 % | 97.92 % |
@@ -201,19 +187,3 @@ no cookie banner needed. Set it up:
 | 1 s | 93.04 % | 66.90 % |
 | 2 s | 96.51 % | 79.25 % |
 | 3 s | **99.08 %** | **84.18 %** |
-
----
-
-## Citation
-
-```
-Vavoulas, G., Pediaditis, M., Chatzaki, C., Spanakis, E. G., & Tsiknakis, M. (2014).
-The MobiFall Dataset: Fall Detection and Classification with a Smartphone.
-Proceedings of PETRA 2014.
-```
-
----
-
-## License
-
-This project is for academic purposes. Dataset is subject to the original MobiFall license.
