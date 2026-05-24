@@ -2,7 +2,7 @@
 
 > **IMU-based fall detection using Deep CNN, Transfer Learning, and Classical ML**  
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-667eea?style=for-the-badge&logo=streamlit)](https://your-app.streamlit.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-667eea?style=for-the-badge&logo=streamlit)](https://falldetection1.streamlit.app/)
 [![Visitors](https://visitor-badge.laobi.icu/badge?page_id=mrunalsuhas.fall-detection)](https://github.com/mrunalsuhas/fall-detection)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://python.org)
 

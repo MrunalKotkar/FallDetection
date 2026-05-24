@@ -18,7 +18,7 @@ if str(_ROOT) not in sys.path:
 # ── Page config (must be first Streamlit call) ──────────────────────────────
 st.set_page_config(
     page_title="Fall Detection & Classification",
-    page_icon="⚠️",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -71,10 +71,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.markdown('<p class="big-title">⚠️ Fall Detection & Classification</p>', unsafe_allow_html=True)
+st.markdown('<p class="big-title">🛡️ Fall Detection & Classification</p>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="sub-title">IMU-based fall detection using Deep CNN + Transfer Learning + Classical ML &nbsp;|&nbsp; '
-    'MobiFall Dataset v2.0 &nbsp;|&nbsp; SJSU CS Project</p>',
+    '<p class="sub-title">Detects falls from 6-axis wearable IMU data using three ML pipelines — '
+    'Deep CNN (99.35% F1), Transfer Learning from UCI HAR (99.03% F1), and XGBoost with handcrafted features (95.62% F1) — '
+    'evaluated on 630 trials across 24 subjects from the MobiFall v2.0 dataset.</p>',
     unsafe_allow_html=True,
 )
 st.divider()
@@ -411,10 +412,9 @@ with tab_about:
     st.divider()
     st.subheader("Links & References")
     st.markdown("""
-    - **Notebooks:** [`notebooks/`](notebooks/) — full training code on Google Colab
-    - **Dataset:** [MobiFall v2.0 on Kaggle](https://www.kaggle.com/datasets/kmknation/mobifall-dataset-v20)
+    - **Notebooks:** [View on GitHub](https://github.com/mrunalsuhas/fall-detection/tree/main/notebooks) — full training code on Google Colab
     - **Pre-training source:** [UCI HAR Dataset](https://archive.ics.uci.edu/ml/datasets/human+activity+recognition+using+smartphones)
-    - **Report:** [`Report.pdf`](Report.pdf)
+    - **Report:** [View Report (PDF)](https://github.com/mrunalsuhas/fall-detection/blob/main/Report.pdf)
 
     > Vavoulas, G. et al. (2014). *The MobiFall Dataset: Fall Detection and Classification with a Smartphone.*
     """)
