@@ -2,6 +2,12 @@
 Generate synthetic but plausible IMU sample signals for the Streamlit demo.
 Each file is 3 seconds at 100 Hz = 300 rows, 6 columns.
 Run once: python scripts/generate_samples.py
+
+MobiFall sensor placement: phone in right front thigh pocket, top pointing up.
+Axis convention (matches training data statistics):
+  acc_y  ≈ primary gravity axis (~9.5 m/s² when upright)
+  acc_x  ≈ lateral axis            (~0 m/s² when upright)
+  acc_z  ≈ forward/outward axis    (~1-2 m/s² when upright, slight tilt)
 """
 import numpy as np
 import pandas as pd
@@ -24,97 +30,105 @@ def _smooth(x, k=5):
     return np.convolve(x, np.ones(k) / k, mode="same")
 
 
+# ── Fall activities ──────────────────────────────────────────────────────────
+# All start upright (acc_y ≈ GRAVITY) then transition to post-fall orientation.
+
 def generate_fol():
-    """Forward Fall (FOL): pre-lean → sharp forward impact → rest on front."""
+    """Forward Fall (FOL): upright → forward lean → chest impact → lying face down."""
     t = np.linspace(0, DURATION, T)
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
 
-    # Static gravity baseline (upright)
-    acc[:, 2] = GRAVITY
+    # Upright: gravity on Y (phone in right thigh pocket)
+    acc[:, 1] = GRAVITY
 
-    # Pre-fall lean phase (0 → 1.4 s)
+    # Pre-fall lean forward (0 → 1.4 s): body tilts, Z gains gravity component
     lean_end = int(1.4 * FS)
-    acc[:lean_end, 0] += np.linspace(0, 3.0, lean_end)          # forward lean
-    acc[:lean_end, 2] -= np.linspace(0, 1.5, lean_end)           # gravity shifting
-    gyro[:lean_end, 1] -= np.linspace(0, 4.0, lean_end)          # pitch forward
+    acc[:lean_end, 2] += np.linspace(0, 4.0, lean_end)
+    acc[:lean_end, 1] -= np.linspace(0, 2.5, lean_end)
+    gyro[:lean_end, 0] += np.linspace(0, 3.5, lean_end)   # pitch forward
 
-    # Impact (1.4 → 1.7 s)
+    # Impact (1.4 → 1.7 s): sharp deceleration spike
     imp_start, imp_end = int(1.4 * FS), int(1.7 * FS)
     imp_len = imp_end - imp_start
     spike = np.exp(-np.linspace(0, 5, imp_len))
-    acc[imp_start:imp_end, 0] += 18.0 * spike
-    acc[imp_start:imp_end, 2] += 22.0 * spike
-    gyro[imp_start:imp_end, 1] -= 8.0 * spike
+    acc[imp_start:imp_end, 1] += 22.0 * spike
+    acc[imp_start:imp_end, 2] += 18.0 * spike
+    acc[imp_start:imp_end, 0] +=  8.0 * spike
+    gyro[imp_start:imp_end, 0] -=  7.0 * spike
 
-    # Post-fall (lying face down, gravity shifts to z≈0, x≈+g)
-    post_start = imp_end
-    acc[post_start:, 0] = np.linspace(acc[post_start - 1, 0], GRAVITY * 0.9, T - post_start)
-    acc[post_start:, 2] = np.linspace(acc[post_start - 1, 2], 1.5, T - post_start)
-    gyro[post_start:, 1] = np.linspace(gyro[post_start - 1, 1], 0, T - post_start)
+    # Post-fall: lying face down — gravity now mostly on Z
+    post = imp_end
+    acc[post:, 2] = np.linspace(acc[post - 1, 2], GRAVITY * 0.92, T - post)
+    acc[post:, 1] = np.linspace(acc[post - 1, 1], 1.5, T - post)
+    gyro[post:, 0] = np.linspace(gyro[post - 1, 0], 0, T - post)
 
     acc  += _noise((T, 3), 0.12)
-    gyro += _noise((T, 3), 0.04)
+    gyro += _noise((T, 3), 0.05)
     return np.concatenate([acc, gyro], axis=1)
 
 
 def generate_fkl():
-    """Fall on Knees (FKL): forward stumble → knee impact → body impact."""
+    """Fall on Knees (FKL): forward stumble → combined knee/torso impact → lying front."""
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
-    acc[:, 2] = GRAVITY
+    acc[:, 1] = GRAVITY
 
-    # Pre-fall stumble
-    lean_end = int(1.3 * FS)
-    acc[:lean_end, 0] += np.linspace(0, 4.0, lean_end)
+    # Pre-fall lean forward (0 → 1.4 s)
+    lean_end = int(1.4 * FS)
+    acc[:lean_end, 2] += np.linspace(0, 4.0, lean_end)
+    acc[:lean_end, 1] -= np.linspace(0, 2.5, lean_end)
     gyro[:lean_end, 0] += np.linspace(0, 3.0, lean_end)
 
-    # Knee impact (1.3 s)
-    k1 = int(1.3 * FS)
-    k1_end = k1 + 12
-    knee_spike = np.exp(-np.linspace(0, 4, k1_end - k1))
-    acc[k1:k1_end, 2] += 14.0 * knee_spike
-    acc[k1:k1_end, 1] += 8.0 * knee_spike
+    # Single impulsive impact (1.4–1.65 s): knee hits then body falls forward
+    imp_start, imp_end = int(1.4 * FS), int(1.65 * FS)
+    imp_len = imp_end - imp_start
+    spike = np.exp(-np.linspace(0, 5, imp_len))
+    acc[imp_start:imp_end, 1] += 24.0 * spike    # primary Y (vertical deceleration)
+    acc[imp_start:imp_end, 2] += 14.0 * spike    # Z (forward component)
+    acc[imp_start:imp_end, 0] += 10.0 * spike    # X (lateral — provides high kurtosis)
+    gyro[imp_start:imp_end, 0] -=  6.0 * spike
 
-    # Body/hip impact (1.65 s)
-    k2 = int(1.65 * FS)
-    k2_end = k2 + 15
-    body_spike = np.exp(-np.linspace(0, 4, k2_end - k2))
-    acc[k2:k2_end, 2] += 18.0 * body_spike
-    acc[k2:k2_end, 0] += 12.0 * body_spike
-
-    # Post-fall
-    acc[k2_end:, 0] = np.linspace(acc[k2_end - 1, 0], GRAVITY * 0.85, T - k2_end)
-    acc[k2_end:, 2] = np.linspace(acc[k2_end - 1, 2], 2.0, T - k2_end)
+    # Post-fall: lying face down, gravity on Z
+    post = imp_end
+    acc[post:, 2] = np.linspace(acc[post - 1, 2], GRAVITY * 0.90, T - post)
+    acc[post:, 1] = np.linspace(acc[post - 1, 1], 1.5, T - post)
+    gyro[post:, 0] = np.linspace(gyro[post - 1, 0], 0, T - post)
 
     acc  += _noise((T, 3), 0.12)
-    gyro += _noise((T, 3), 0.04)
+    gyro += _noise((T, 3), 0.05)
     return np.concatenate([acc, gyro], axis=1)
 
 
 def generate_bsc():
-    """Back Stumble (BSC): backward lean → backward impact → lying on back."""
+    """Back Stumble (BSC): backward lean → back/buttock impact → lying on back."""
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
-    acc[:, 2] = GRAVITY
+    acc[:, 1] = GRAVITY
 
+    # Backward lean
     lean_end = int(1.5 * FS)
-    acc[:lean_end, 0] -= np.linspace(0, 3.5, lean_end)          # backward
-    gyro[:lean_end, 1] += np.linspace(0, 4.5, lean_end)          # pitch backward
+    acc[:lean_end, 2] -= np.linspace(0, 4.0, lean_end)    # Z decreases (leaning back)
+    acc[:lean_end, 1] -= np.linspace(0, 2.0, lean_end)
+    gyro[:lean_end, 0] -= np.linspace(0, 4.0, lean_end)   # pitch backward
 
+    # Impact (1.5 → 1.8 s)
     imp_start, imp_end = int(1.5 * FS), int(1.8 * FS)
     imp_len = imp_end - imp_start
     spike = np.exp(-np.linspace(0, 5, imp_len))
-    acc[imp_start:imp_end, 0] -= 16.0 * spike
-    acc[imp_start:imp_end, 2] += 20.0 * spike
-    gyro[imp_start:imp_end, 1] += 7.0 * spike
+    acc[imp_start:imp_end, 1] += 20.0 * spike
+    acc[imp_start:imp_end, 2] -= 18.0 * spike             # negative Z spike (backward)
+    acc[imp_start:imp_end, 0] +=  5.0 * spike
+    gyro[imp_start:imp_end, 0] -=  8.0 * spike
 
+    # Post-fall: lying on back — gravity on -Z
     post = imp_end
-    acc[post:, 0] = np.linspace(acc[post - 1, 0], -GRAVITY * 0.9, T - post)
-    acc[post:, 2] = np.linspace(acc[post - 1, 2], 1.5, T - post)
+    acc[post:, 2] = np.linspace(acc[post - 1, 2], -GRAVITY * 0.92, T - post)
+    acc[post:, 1] = np.linspace(acc[post - 1, 1], 1.5, T - post)
+    gyro[post:, 0] = np.linspace(gyro[post - 1, 0], 0, T - post)
 
     acc  += _noise((T, 3), 0.12)
-    gyro += _noise((T, 3), 0.04)
+    gyro += _noise((T, 3), 0.05)
     return np.concatenate([acc, gyro], axis=1)
 
 
@@ -122,86 +136,113 @@ def generate_sdl():
     """Sideways Fall (SDL): lateral lean → side impact → lying on side."""
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
-    acc[:, 2] = GRAVITY
+    acc[:, 1] = GRAVITY
 
+    # Lateral lean (right side)
     lean_end = int(1.4 * FS)
-    acc[:lean_end, 1] += np.linspace(0, 4.0, lean_end)           # lateral lean
-    gyro[:lean_end, 2] += np.linspace(0, 5.0, lean_end)           # roll
+    acc[:lean_end, 0] += np.linspace(0, 4.5, lean_end)    # X increases (lateral lean)
+    acc[:lean_end, 1] -= np.linspace(0, 2.5, lean_end)
+    gyro[:lean_end, 2] += np.linspace(0, 4.5, lean_end)   # roll
 
+    # Impact (1.4 → 1.7 s)
     imp_start, imp_end = int(1.4 * FS), int(1.7 * FS)
     imp_len = imp_end - imp_start
     spike = np.exp(-np.linspace(0, 5, imp_len))
-    acc[imp_start:imp_end, 1] += 20.0 * spike
-    acc[imp_start:imp_end, 2] += 18.0 * spike
-    gyro[imp_start:imp_end, 2] += 9.0 * spike
+    acc[imp_start:imp_end, 0] += 22.0 * spike             # main lateral impact
+    acc[imp_start:imp_end, 1] += 16.0 * spike
+    acc[imp_start:imp_end, 2] +=  8.0 * spike
+    gyro[imp_start:imp_end, 2] +=  9.0 * spike
 
+    # Post-fall: lying on right side — gravity on +X
     post = imp_end
-    acc[post:, 1] = np.linspace(acc[post - 1, 1], GRAVITY * 0.9, T - post)
-    acc[post:, 2] = np.linspace(acc[post - 1, 2], 1.5, T - post)
+    acc[post:, 0] = np.linspace(acc[post - 1, 0], GRAVITY * 0.90, T - post)
+    acc[post:, 1] = np.linspace(acc[post - 1, 1], 1.5, T - post)
+    gyro[post:, 2] = np.linspace(gyro[post - 1, 2], 0, T - post)
 
     acc  += _noise((T, 3), 0.12)
+    gyro += _noise((T, 3), 0.05)
+    return np.concatenate([acc, gyro], axis=1)
+
+
+# ── ADL activities ───────────────────────────────────────────────────────────
+# Gravity on Y axis; small Z tilt; periodic motion appropriate to activity.
+
+def generate_wal():
+    """Walking (WAL): gravity on Y, periodic step oscillation."""
+    t = np.linspace(0, DURATION, T)
+    freq = 1.85  # Hz (typical walking cadence)
+    acc = np.zeros((T, 3), np.float32)
+    gyro = np.zeros((T, 3), np.float32)
+
+    # Gravity baseline (Y-axis primary)
+    acc[:, 1] = GRAVITY * 0.96 + 2.2 * np.sin(2 * np.pi * freq * t)
+    # Forward/backward motion
+    acc[:, 2] = 1.5 + 1.0 * np.sin(2 * np.pi * freq * t + np.pi / 4)
+    # Lateral weight shift (half freq)
+    acc[:, 0] = 0.6 * np.sin(2 * np.pi * freq * 0.5 * t)
+    # Gyro: pitch and roll oscillation
+    gyro[:, 0] = 1.2 * np.sin(2 * np.pi * freq * t)
+    gyro[:, 2] = 0.5 * np.sin(2 * np.pi * freq * 0.5 * t + np.pi / 3)
+
+    acc  += _noise((T, 3), 0.10)
     gyro += _noise((T, 3), 0.04)
     return np.concatenate([acc, gyro], axis=1)
 
 
-def generate_wal():
-    """Walking (WAL): regular periodic gait pattern."""
+def generate_jog():
+    """Jogging (JOG): gravity on Y, higher-amplitude step oscillation."""
     t = np.linspace(0, DURATION, T)
-    freq = 1.85  # Hz
+    freq = 2.6  # Hz (typical jogging cadence)
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
 
-    # Gravity + vertical gait oscillation
-    acc[:, 2] = GRAVITY + 1.4 * np.sin(2 * np.pi * freq * t)
-    # Forward/backward arm swing
-    acc[:, 0] = 0.5 * np.sin(2 * np.pi * freq * t + np.pi / 4)
-    # Lateral weight shift
-    acc[:, 1] = 0.3 * np.sin(2 * np.pi * freq * 0.5 * t)
-    # Pitch oscillation
-    gyro[:, 1] = 0.9 * np.sin(2 * np.pi * freq * t)
-    gyro[:, 0] = 0.2 * np.sin(2 * np.pi * freq * t + np.pi / 3)
+    acc[:, 1] = GRAVITY * 0.95 + 4.5 * np.sin(2 * np.pi * freq * t)
+    acc[:, 2] = 1.8 + 1.8 * np.sin(2 * np.pi * freq * t + np.pi / 4)
+    acc[:, 0] = 1.0 * np.sin(2 * np.pi * freq * 0.5 * t)
+    gyro[:, 0] = 2.5 * np.sin(2 * np.pi * freq * t)
+    gyro[:, 2] = 0.8 * np.sin(2 * np.pi * freq * 0.5 * t + np.pi / 3)
+
+    acc  += _noise((T, 3), 0.12)
+    gyro += _noise((T, 3), 0.06)
+    return np.concatenate([acc, gyro], axis=1)
+
+
+def generate_std():
+    """Standing still (STD): gravity on Y, small body sway."""
+    t = np.linspace(0, DURATION, T)
+    acc = np.zeros((T, 3), np.float32)
+    gyro = np.zeros((T, 3), np.float32)
+
+    # Gravity on Y; slight forward tilt (phone in pocket)
+    acc[:, 1] = GRAVITY * 0.97
+    acc[:, 2] = GRAVITY * 0.12
+    # Slow postural sway (breathing + balance)
+    acc[:, 1] += 0.35 * np.sin(2 * np.pi * 0.22 * t)
+    acc[:, 0] += 0.18 * np.sin(2 * np.pi * 0.17 * t + 0.5)
+    gyro[:, 0] += 0.15 * np.sin(2 * np.pi * 0.20 * t)
 
     acc  += _noise((T, 3), 0.08)
     gyro += _noise((T, 3), 0.03)
     return np.concatenate([acc, gyro], axis=1)
 
 
-def generate_jog():
-    """Jogging (JOG): faster periodic motion with higher amplitude."""
-    t = np.linspace(0, DURATION, T)
-    freq = 2.6
-    acc = np.zeros((T, 3), np.float32)
-    gyro = np.zeros((T, 3), np.float32)
-
-    acc[:, 2] = GRAVITY + 3.0 * np.sin(2 * np.pi * freq * t)
-    acc[:, 0] = 1.2 * np.sin(2 * np.pi * freq * t + np.pi / 4)
-    acc[:, 1] = 0.5 * np.sin(2 * np.pi * freq * 0.5 * t)
-    gyro[:, 1] = 2.0 * np.sin(2 * np.pi * freq * t)
-    gyro[:, 0] = 0.4 * np.sin(2 * np.pi * freq * t + np.pi / 3)
-
-    acc  += _noise((T, 3), 0.1)
-    gyro += _noise((T, 3), 0.05)
-    return np.concatenate([acc, gyro], axis=1)
-
-
-def generate_std():
-    """Standing still (STD): minimal motion, gravity on z-axis."""
-    acc = np.zeros((T, 3), np.float32)
-    gyro = np.zeros((T, 3), np.float32)
-    acc[:, 2] = GRAVITY
-    acc  += _noise((T, 3), 0.05)
-    gyro += _noise((T, 3), 0.02)
-    return np.concatenate([acc, gyro], axis=1)
-
-
 def generate_stn():
-    """Sitting (STN): gravity mostly on z, slight tilt on y."""
+    """Sitting (STN): gravity on Y (phone stays in pocket, slightly more tilted)."""
+    t = np.linspace(0, DURATION, T)
     acc = np.zeros((T, 3), np.float32)
     gyro = np.zeros((T, 3), np.float32)
-    acc[:, 2] = GRAVITY * 0.92
-    acc[:, 1] = GRAVITY * 0.15
-    acc  += _noise((T, 3), 0.05)
-    gyro += _noise((T, 3), 0.02)
+
+    # Y is still dominant (phone in pocket); slightly more Z due to hip angle
+    # Keep acc_x ≈ 0 so X-kurtosis stays in ADL range
+    acc[:, 1] = GRAVITY * 0.94
+    acc[:, 2] = GRAVITY * 0.18
+    # Slow upper-body sway (breathing, weight shifts)
+    acc[:, 1] += 0.45 * np.sin(2 * np.pi * 0.20 * t)
+    acc[:, 2] += 0.20 * np.sin(2 * np.pi * 0.23 * t + 0.8)
+    gyro[:, 0] += 0.12 * np.sin(2 * np.pi * 0.19 * t)
+
+    acc  += _noise((T, 3), 0.08)
+    gyro += _noise((T, 3), 0.03)
     return np.concatenate([acc, gyro], axis=1)
 
 

@@ -4,10 +4,16 @@ SJSU CS Project | MobiFall Dataset v2.0
 """
 import os
 import io
+import sys
 import numpy as np
 import pandas as pd
 import streamlit as st
 from pathlib import Path
+
+# Ensure project root is on sys.path regardless of where streamlit is launched from
+_ROOT = Path(__file__).parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 # ── Page config (must be first Streamlit call) ──────────────────────────────
 st.set_page_config(
@@ -148,7 +154,7 @@ with tab_demo:
         if mode == "Sample data":
             choice = st.selectbox("Choose an activity", list(SAMPLE_OPTIONS.keys()))
             code, expected_fall = SAMPLE_OPTIONS[choice]
-            sample_path = Path("sample_data") / f"{code}_sample.csv"
+            sample_path = _ROOT / "sample_data" / f"{code}_sample.csv"
             if sample_path.exists():
                 signal_data = pd.read_csv(sample_path).values.astype(np.float32)
                 signal_label = choice.split("(")[0].strip().lstrip("⚠️✅ ")

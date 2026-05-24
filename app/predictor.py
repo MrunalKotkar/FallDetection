@@ -1,8 +1,12 @@
 """
 Model loading and inference for the Streamlit demo.
-Falls back gracefully when model files are absent.
+
+Supports two model formats (tries new format first):
+  NEW (version-independent): xgboost_binary.json + xgboost_binary_meta.npz
+  OLD (legacy joblib):       xgboost_binary.joblib  ← may fail on sklearn mismatch
 """
 import numpy as np
+import xgboost as xgb
 import joblib
 from pathlib import Path
 
@@ -50,14 +54,44 @@ FALL_CODE_TO_NAME = {
 # ---------------------------------------------------------------------------
 
 class FallDetector:
-    """Loads trained sklearn models and runs inference on raw IMU windows."""
+    """
+    Loads XGBoost models and runs inference on raw IMU windows.
+
+    Tries the version-independent JSON format first, then falls back to
+    the legacy sklearn Pipeline joblib (which may fail on version mismatch).
+    """
 
     def __init__(self):
-        self._binary  = self._try_load("xgboost_binary.joblib")
-        self._fall4   = self._try_load("xgboost_fall4.joblib")
+        self._binary_booster, self._binary_meta = self._load_json("xgboost_binary")
+        self._fall4_booster,  self._fall4_meta  = self._load_json("xgboost_fall4")
+
+        # Legacy fallback — only used if JSON files are absent
+        if self._binary_booster is None:
+            self._binary_pipe = self._load_joblib("xgboost_binary.joblib")
+        else:
+            self._binary_pipe = None
+
+        if self._fall4_booster is None:
+            self._fall4_pipe = self._load_joblib("xgboost_fall4.joblib")
+        else:
+            self._fall4_pipe = None
 
     @staticmethod
-    def _try_load(filename: str):
+    def _load_json(name: str):
+        json_path = MODELS_DIR / f"{name}.json"
+        meta_path = MODELS_DIR / f"{name}_meta.npz"
+        if json_path.exists() and meta_path.exists():
+            try:
+                booster = xgb.Booster()
+                booster.load_model(str(json_path))
+                meta = np.load(str(meta_path))
+                return booster, meta
+            except Exception:
+                pass
+        return None, None
+
+    @staticmethod
+    def _load_joblib(filename: str):
         path = MODELS_DIR / filename
         if path.exists():
             try:
@@ -67,26 +101,42 @@ class FallDetector:
         return None
 
     def is_loaded(self) -> bool:
-        return self._binary is not None
+        return (self._binary_booster is not None) or (self._binary_pipe is not None)
+
+    def _predict_proba(self, X: np.ndarray, booster, meta, pipe) -> np.ndarray:
+        """Apply preprocessing + predict, returning a (1, n_classes) probability array."""
+        if booster is not None:
+            X_imp = np.where(np.isnan(X), meta["imputer_stats"], X)
+            if "scaler_mean" in meta.files:
+                X_proc = (X_imp - meta["scaler_mean"]) / meta["scaler_scale"]
+            else:
+                X_proc = X_imp
+            raw = booster.predict(xgb.DMatrix(X_proc))
+            # XGBoost output shape varies by version and objective:
+            #   binary:logistic  → (n_samples,)       e.g. array([0.97])
+            #   multi:softprob   → (n_samples, n_cls)  or flat (n_samples*n_cls,)
+            if raw.ndim == 2:
+                return raw                              # already (1, n_classes)
+            if raw.shape == (1,):
+                return np.column_stack([1 - raw, raw]) # binary → (1, 2)
+            return raw.reshape(1, -1)                  # flat multiclass → (1, n_classes)
+        else:
+            return pipe.predict_proba(X)
 
     def predict(self, signal: np.ndarray, task: str = "binary") -> dict:
-        """
-        Parameters
-        ----------
-        signal : np.ndarray, shape (T, 6)
-        task   : "binary" | "fall4"
-
-        Returns dict with keys: prediction, confidence, probabilities
-        """
-        window = get_center_window(signal, win_size=300)
+        window   = get_center_window(signal, win_size=300)
         features, _ = extract_features(window)
         X = features.reshape(1, -1)
 
-        model = self._binary if task == "binary" else self._fall4
-        if model is None:
+        if task == "binary":
+            booster, meta, pipe = self._binary_booster, self._binary_meta, self._binary_pipe
+        else:
+            booster, meta, pipe = self._fall4_booster, self._fall4_meta, self._fall4_pipe
+
+        if booster is None and pipe is None:
             return {"prediction": -1, "confidence": 0.0, "probabilities": {}}
 
-        proba = model.predict_proba(X)[0]
+        proba = self._predict_proba(X, booster, meta, pipe)[0]
         pred  = int(np.argmax(proba))
         conf  = float(proba[pred])
 
@@ -96,9 +146,10 @@ class FallDetector:
                 "confidence": conf,
                 "probabilities": {"Normal (ADL)": float(proba[0]), "Fall": float(proba[1])},
             }
-            # If fall detected and fall4 model exists, also run fall type classification
-            if pred == 1 and self._fall4 is not None:
-                p4 = self._fall4.predict_proba(X)[0]
+            if pred == 1 and (self._fall4_booster is not None or self._fall4_pipe is not None):
+                p4 = self._predict_proba(
+                    X, self._fall4_booster, self._fall4_meta, self._fall4_pipe
+                )[0]
                 fc = int(np.argmax(p4))
                 result["fall_type_code"], result["fall_type_name"] = FALL_CODE_TO_NAME.get(fc, ("?", "Unknown"))
                 result["fall_type_confidence"] = float(p4[fc])
