@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data (large dataset files — download from Kaggle)
+data/
+*.zip
+*.tar.gz
+*.h5
+*.hdf5
+
+# Model files (large — see models/README.md for download instructions)
+models/*.pkl
+models/*.pt
+models/*.pth
+# Uncomment below to also exclude .h5 weight files:
+# models/*.h5
+
+# Kaggle cache
+~/.cache/kagglehub/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.code-workspace
+
+# Secrets / credentials
+.env
+.env.local
+kaggle.json
+secrets.toml
+.streamlit/secrets.toml
+
+# Logs
+*.log
+logs/
+
+# Misc
+*.bak
+*.swp
